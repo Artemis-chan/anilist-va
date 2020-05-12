@@ -1,0 +1,255 @@
+﻿using System;
+using System.Threading.Tasks;
+using System.Net.Http;
+using System.Collections.Generic;
+
+namespace Artemis.Anilist
+{
+    public class Anilist
+    {
+        private static HttpClient client = new HttpClient();
+        private static readonly string aniServer = "https://graphql.anilist.co";
+        //private readonly string postTestServer = "http://ptsv2.com/t/pzjkx-1589306236/post";
+        public static async Task Main(string[] args)
+        {
+            //test
+            Console.WriteLine(await VA(args));
+        }
+        public static async Task<string> VA(params string[] name)
+        {
+            var query = @"query ($search: String) {
+            Character(search: $search) {
+                    id
+                    name {
+                        first
+                        last
+                    }
+                    media(type: ANIME perPage: 1 page: 1) {
+                        edges {
+                            node{
+                                id
+                            }
+                            voiceActors(language: JAPANESE) {
+                                name {
+                                    first
+                                    last
+                                }
+                            }
+                        }
+                    }
+                }  
+            }";
+
+            string fullName = Join(name);
+            fullName = fullName.ToLower();
+
+            var values = new Dictionary<string, string>
+            {
+                { "query", query },
+                { "variables", "{\"search\": \"" + fullName + "\"}"}
+            };
+
+            QuickType.Character charData = await GetCharacterData(values);
+            charData.Name.ToLower();
+            if(!MatchNames(fullName, charData.Name.full))
+            {
+                values["variables"] = "{\"search\": \"" + Reverse(fullName) + "\"}";
+                charData = await GetCharacterData(values);
+            }
+            return charData.Media.Edges[0].VoiceActors[0].Name.full;
+        }
+
+        static async Task<QuickType.Character> GetCharacterData(Dictionary<string, string>  values)
+        {
+            var content = new FormUrlEncodedContent(values);
+            var response = await client.PostAsync(aniServer, content);
+            var responseString = await response.Content.ReadAsStringAsync();
+            return QuickType.CharData.FromJson(responseString).Data.Character;
+        }
+
+        static bool MatchNames(string n1, string n2)
+        {
+            //Console.WriteLine("n1: " + n1 + "\n n2: " + n2 + "\n Rn2: " + Reverse(n2));
+            return (n1 == n2) || (n1 == Reverse(n2));
+        }
+
+        static string Reverse(string str)
+        {
+            string[] names = str.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return Join(names, true);
+        }
+
+        static string Join(string[] name, bool reverse = false)
+        {
+            var fullName = "";
+            if(reverse)
+            {
+                for (int i = name.Length - 1; i >= 0; i--)
+                {
+                    fullName += name[i];
+                    if (i != 0)
+                    {
+                        fullName += " ";
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < name.Length; i++)
+                {
+                    fullName += name[i];
+                    if (i != name.Length - 1)
+                    {
+                        fullName += " ";
+                    }
+                }
+            }
+            return fullName;
+        }
+    }
+
+}
+// class CharacterData
+// {
+//     public Data data;
+//     public class Data
+//     {
+//         public Character character;
+
+//         public class Character
+//         {
+//             public int id;
+//             public MediaConnection media;
+
+//             public class MediaConnection
+//             {
+//                 public MediaEdge[] edges;
+//                 public class MediaEdge
+//                 {
+//                     Media node;
+//                     public Staff[] voiceActors;
+
+//                     private class Media
+//                     {
+//                         int id;
+//                     }
+
+//                     public class Staff
+//                     {
+//                         public Name name;
+
+//                         public class Name
+//                         {
+//                             public string first;
+//                             public string last;
+//                             public string full { get { return first + " " + last; } }
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+//     }
+// }
+//public string full { get { return First + " " + Last; } }
+
+// Generated by https://quicktype.io
+
+namespace QuickType
+{
+    using System;
+    using System.Collections.Generic;
+
+    using System.Globalization;
+    using Newtonsoft.Json;
+    using Newtonsoft.Json.Converters;
+
+    public partial class CharData
+    {
+        [JsonProperty("data")]
+        public Data Data { get; set; }
+    }
+
+    public partial class Data
+    {
+        [JsonProperty("Character")]
+        public Character Character { get; set; }
+    }
+
+    public partial class Character
+    {
+        [JsonProperty("id")]
+        public long Id { get; set; }
+
+        [JsonProperty("name")]
+        public Name Name { get; set; }
+
+        [JsonProperty("media")]
+        public Media Media { get; set; }
+    }
+
+    public partial class Media
+    {
+        [JsonProperty("edges")]
+        public Edge[] Edges { get; set; }
+    }
+
+    public partial class Edge
+    {
+        [JsonProperty("node")]
+        public Node Node { get; set; }
+
+        [JsonProperty("voiceActors")]
+        public VoiceActor[] VoiceActors { get; set; }
+    }
+
+    public partial class Node
+    {
+        [JsonProperty("id")]
+        public long Id { get; set; }
+    }
+
+    public partial class VoiceActor
+    {
+        [JsonProperty("name")]
+        public Name Name { get; set; }
+    }
+
+    public partial class Name
+    {
+        [JsonProperty("first")]
+        public string First { get; set; }
+
+        [JsonProperty("last")]
+        public string Last { get; set; }
+        public string full { get { return First + " " + Last; } }
+        public void ToLower()
+        {
+            First = First.ToLower();
+            Last = Last.ToLower();
+        }
+    }
+
+    public partial class CharData
+    {
+        public static CharData FromJson(string json) => JsonConvert.DeserializeObject<CharData>(json, QuickType.Converter.Settings);
+    }
+
+    public static class Serialize
+    {
+        public static string ToJson(this CharData self) => JsonConvert.SerializeObject(self, QuickType.Converter.Settings);
+    }
+
+    internal static class Converter
+    {
+        public static readonly JsonSerializerSettings Settings = new JsonSerializerSettings
+        {
+            MetadataPropertyHandling = MetadataPropertyHandling.Ignore,
+            DateParseHandling = DateParseHandling.None,
+            Converters = {
+                new IsoDateTimeConverter { DateTimeStyles = DateTimeStyles.AssumeUniversal }
+            },
+        };
+    }
+}
+
+
